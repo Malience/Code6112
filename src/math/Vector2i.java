@@ -7,6 +7,10 @@ public class Vector2i {
 
 	public int x, y;
 	
+	
+	public boolean equals(Vector2i v) {
+		return v.x == this.x && v.y == this.y;
+	}
 	public String toString() {
 		return "X: " + x + " Y: " + y;
 	}

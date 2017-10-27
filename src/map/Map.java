@@ -1,9 +1,12 @@
 package map;
 import java.io.File;
+import car.Car;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
+import java.util.Queue;
 import java.util.Random;
 import java.util.Scanner;
+import java.util.Stack;
 
 import math.Vector2i;
 
@@ -42,12 +45,65 @@ public class Map {
 		
 	}
 	
-	public static void instantiateCar() {
+	static int id;
+	
+	public static Car instantiateCar() {
 		Vector2i v = roads.remove(new Random().nextInt(roads.size()));
 		map[v.x][v.y] = CAR;
+		return new Car("Car " + id++, v, v);
+	}
+	
+	public static Vector2i getTarget(Vector2i oldTarget) {
+		Vector2i v = roads.remove(new Random().nextInt(roads.size()));
+		roads.add(oldTarget);
+		return v;
+	}
+	
+	public static void move(Vector2i from, Vector2i to) {
+		map[from.x][from.y] = ROAD;
+		map[to.x][to.y] = CAR;
+	}
+	
+	public static ArrayList<Vector2i> path(Vector2i from, Vector2i to){
+		ArrayList<Vector2i> currentPath = new ArrayList<Vector2i>();
+		Stack<Vector2i> buffer = new Stack<Vector2i>();
+		buffer.add(from);
+		
+		while(!buffer.isEmpty()) {
+			Vector2i current = buffer.pop();
+			currentPath.add(current);
+			
+			if(current.equals(to)) break;
+			//Expand
+			if(current.x + 1 < map.length 
+					&& map[current.x + 1][current.y] == ROAD 
+					&& contains(currentPath, new Vector2i(current.x + 1, current.y))) 
+				buffer.push(new Vector2i(current.x + 1, current.y));
+			if(current.x > 0 
+					&& map[current.x - 1][current.y] == ROAD
+					&& contains(currentPath, new Vector2i(current.x - 1, current.y))) 
+				buffer.push(new Vector2i(current.x - 1, current.y));
+			if(current.y + 1 < map[0].length 
+					&& map[current.x][current.y + 1] == ROAD
+					&& contains(currentPath, new Vector2i(current.x, current.y + 1))) 
+				buffer.push(new Vector2i(current.x, current.y + 1));
+			if(current.y > 0 
+					&& map[current.x][current.y - 1] == ROAD
+					&& contains(currentPath, new Vector2i(current.x, current.y - 1))) 
+				buffer.push(new Vector2i(current.x, current.y - 1));
+			
+		}
+		
+		return currentPath;
 	}
 	
 	
+	public static boolean contains(ArrayList<Vector2i> buffer, Vector2i v) {
+		for(Vector2i b : buffer) {
+			if(b.equals(v)) return false;
+		}
+		return true;
+	}
 	public static String printMap() {
 		String out = "";
 		for(int i = 0; i < map.length; i++) {
