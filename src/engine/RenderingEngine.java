@@ -7,9 +7,8 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.util.Map;
+import map.Map;
 import java.util.Scanner;
 
 import javax.imageio.ImageIO;
@@ -18,22 +17,33 @@ import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
-import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.system.MemoryUtil;
 
 public class RenderingEngine {
 	private long window_handle;
+	@SuppressWarnings("unused")
 	private GLCapabilities glcapabilities;
+	private int building, road, car, program, vert, frag, quadVAO, quadVBO;
 	
-	private int building, road, car;
-	int program, vert, frag;
-	int quad, array;
-	
-	public RenderingEngine(long window) {
-		this.window_handle = window;
+	public RenderingEngine() {
+		glfwInit();
+		
+		glfwDefaultWindowHints();
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+		glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
+		
+		window_handle = glfwCreateWindow(600, 600, "6112 Project", NULL, NULL);
+		
+		glfwMakeContextCurrent(window_handle);
+		glfwSwapInterval(1);		
+		
+		glfwShowWindow(window_handle);
 		
 		glcapabilities = GL.createCapabilities();
 		
@@ -48,91 +58,65 @@ public class RenderingEngine {
 		
 		glViewport(0, 0, width[0], height[0]);
 		
-		constructMap();
-	}
-	
-	public void run() {
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 		GL20.glUseProgram(program);
 		GL20.glUniform1i(GL20.glGetUniformLocation(program, "buildingTexture"), 0);
 		GL20.glUniform1i(GL20.glGetUniformLocation(program, "roadTexture"), 1);
 		GL20.glUniform1i(GL20.glGetUniformLocation(program, "carTexture"), 2);
+		GL13.glActiveTexture(GL13.GL_TEXTURE0); GL11.glBindTexture(GL11.GL_TEXTURE_2D, building);
+		GL13.glActiveTexture(GL13.GL_TEXTURE1); GL11.glBindTexture(GL11.GL_TEXTURE_2D, road);
+		GL13.glActiveTexture(GL13.GL_TEXTURE2); GL11.glBindTexture(GL11.GL_TEXTURE_2D, car);
 		
-		GL13.glActiveTexture(GL13.GL_TEXTURE0);
-		GL11.glBindTexture(GL11.GL_TEXTURE_2D, building);
-		GL13.glActiveTexture(GL13.GL_TEXTURE1);
-		GL11.glBindTexture(GL11.GL_TEXTURE_2D, road);
-		GL13.glActiveTexture(GL13.GL_TEXTURE2);
-		GL11.glBindTexture(GL11.GL_TEXTURE_2D, car);
+        float quadVertices[] = {
+            // positions        // texture Coords
+            0f,  1.0f, 0.0f, 0.0f, 1.0f,
+            0f, 0f, 0.0f, 0.0f, 0.0f,
+             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+             1.0f, 0f, 0.0f, 1.0f, 0.0f,
+        };
+        // setup plane VAO
+        quadVAO = GL30.glGenVertexArrays();
+        quadVBO = GL15.glGenBuffers();
+        GL30.glBindVertexArray(quadVAO);
+        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, quadVBO);
+        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, quadVertices, GL15.GL_STATIC_DRAW);
+        GL20.glEnableVertexAttribArray(0);
+        GL20.glVertexAttribPointer(0, 3, GL_FLOAT, false, 5 * 4, 0);
+        GL20.glEnableVertexAttribArray(1);
+        GL20.glVertexAttribPointer(1, 2, GL_FLOAT, false, 5 * 4, 12);
+	}
+	
+	public boolean windowShouldClose() {return glfwWindowShouldClose(window_handle);}
+	public void pollEvents() {glfwPollEvents();}
+	public void clear() {glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);}
+	public void swapBuffers() {GLFW.glfwSwapBuffers(window_handle);}
+	
+	public void renderMap(Map map) {
+		GL20.glUniform2fv(GL20.glGetUniformLocation(program, "res"), new float[]{2f/map.rowLength,2f/map.colLength});
 		
-		GL20.glUniform2fv(GL20.glGetUniformLocation(program, "res"), new float[]{0.5f/map.Map.map.length,0.5f/map.Map.map[0].length});
-		
-		for(int i = 0; i < map.Map.map.length; i++) {
-			for(int j = 0; j < map.Map.map[0].length; j++) {
-				GL20.glUniform2fv(GL20.glGetUniformLocation(program, "pos"), new float[] {i * 2,j * 2});
-				GL20.glUniform1i(GL20.glGetUniformLocation(program, "Block"), map.Map.map[i][j]);
-				
-				renderQuad();
-			}
+		for(int y = 0; y < map.colLength; y++) for(int x = 0; x < map.rowLength; x++) {
+				GL20.glUniform2fv(GL20.glGetUniformLocation(program, "pos"), new float[] {x,y});
+				GL20.glUniform1i(GL20.glGetUniformLocation(program, "Block"), map.map[y * map.rowLength + x]);
+				glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 		}
-		
-		GLFW.glfwSwapBuffers(window_handle);
 	}
 	
-	static int quadVAO = 0;
-	static int quadVBO;
-	public static void renderQuad()
-	{
-	    if (quadVAO == 0)
-	    {
-	        float quadVertices[] = {
-	            // positions        // texture Coords
-	            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
-	            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-	             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
-	             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-	        };
-	        // setup plane VAO
-	        quadVAO = GL30.glGenVertexArrays();
-	        quadVBO = GL15.glGenBuffers();
-	        GL30.glBindVertexArray(quadVAO);
-	        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, quadVBO);
-	        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, quadVertices, GL15.GL_STATIC_DRAW);
-	        GL20.glEnableVertexAttribArray(0);
-	        GL20.glVertexAttribPointer(0, 3, GL_FLOAT, false, 5 * 4, 0);
-	        GL20.glEnableVertexAttribArray(1);
-	        GL20.glVertexAttribPointer(1, 2, GL_FLOAT, false, 5 * 4, 12);
-	    }
-	    GL30.glBindVertexArray(quadVAO);
-	    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	    GL30.glBindVertexArray(0);
+	public void renderCar(int x, int y) {
+		GL20.glUniform2fv(GL20.glGetUniformLocation(program, "pos"), new float[] {x, y});
+		GL20.glUniform1i(GL20.glGetUniformLocation(program, "Block"), 'C');
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	}
 	
-	public void constructMap() {
-		quad = GL15.glGenBuffers();
-		float[] data = new float[] {
-			0f, 0f,
-			1f, 0f,
-			1f, 1f,
-			0f, 0f,
-			1f, 1f,
-			0f, 1f
-		};
-		array = GL30.glGenVertexArrays();
-		GL30.glBindVertexArray(array);
-		GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, quad);
-		GL15.glBufferData(GL15.GL_ARRAY_BUFFER, data, GL15.GL_STATIC_DRAW);
-		
-		GL20.glEnableVertexAttribArray(0);
-		GL20.glVertexAttribPointer(0, 4, GL_FLOAT, false, 8, 0);
-		
-		
-	}
 	
 	public void dispose() {
 		glDeleteTextures(building);
 		glDeleteTextures(road);
 		glDeleteTextures(car);
+		GL15.glDeleteBuffers(quadVBO);
+		GL30.glDeleteVertexArrays(quadVAO);
+		
+		System.out.println("Disposing of Window!");
+		glfwDestroyWindow(window_handle);
+		glfwTerminate();
 	}
 	
 	public void compileProgram(String path){
@@ -155,19 +139,6 @@ public class RenderingEngine {
 			
 			GL20.glDeleteShader(vert);
 			GL20.glDeleteShader(frag);
-//			String vertex = "", fragment = "";
-//			InputStream in = Class.class.getResourceAsStream(path + ".vs");
-//			BufferedReader reader = new BufferedReader(new InputStreamReader(in));
-//			String line;
-//			while((line = reader.readLine()) != null) vertex += line + "\n";
-//			reader.close();
-//			in.close();
-//			in = Class.class.getResourceAsStream(path + ".fs");
-//			reader = new BufferedReader(new InputStreamReader(in));
-//			while((line = reader.readLine()) != null) fragment += line + "\n";
-//			reader.close();
-//			in.close();
-//			return compileProgram(vertex, fragment);
 		}catch(Exception e){e.printStackTrace();}
 	}
 	
@@ -192,43 +163,31 @@ public class RenderingEngine {
 	private int loadTexture(String fileName) {
 		int texture = glGenTextures();
 		try {
+			glBindTexture(GL_TEXTURE_2D, texture);
+			
+			BufferedImage image = ImageIO.read(new File("./res/" + fileName));
+			
+			int[] pixels = image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
 	
-		glBindTexture(GL_TEXTURE_2D, texture);
-		
-		InputStream in = Class.class.getResourceAsStream("/textures/" + fileName);
-		BufferedImage image = ImageIO.read(new File("./res/" + fileName));
-		
-//		in.close();
-		int[] pixels = image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
-
-        ByteBuffer buffer = MemoryUtil.memAlloc(image.getWidth() * image.getHeight() * 4);
-        boolean alpha = image.getColorModel().hasAlpha();
-
-        for(int y = 0; y < image.getHeight(); y++)
-        {
-            for(int x = 0; x < image.getWidth(); x++)
-            {
-                int pixel = pixels[y * image.getWidth() + x];
-                
-                buffer.put((byte) ((pixel >> 16) & 0xFF));
-                buffer.put((byte) ((pixel >> 8) & 0xFF));
-                buffer.put((byte) ((pixel) & 0xFF));
-                if(alpha) buffer.put((byte) ((pixel >> 24) & 0xFF));
-                else buffer.put((byte)(0xFF));
-            }
-        }
-        buffer.flip();
-        
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, image.getWidth(), image.getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
-        MemoryUtil.memFree(buffer);
-        glBindTexture(GL_TEXTURE_2D, 0);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+	        ByteBuffer buffer = MemoryUtil.memAlloc(image.getWidth() * image.getHeight() * 4);
+	        boolean alpha = image.getColorModel().hasAlpha();
+	
+	        for(int y = 0; y < image.getHeight(); y++) for(int x = 0; x < image.getWidth(); x++) {
+	                int pixel = pixels[y * image.getWidth() + x];
+	                
+	                buffer.put((byte) ((pixel >> 16) & 0xFF)); buffer.put((byte) ((pixel >> 8) & 0xFF)); buffer.put((byte) ((pixel) & 0xFF));
+	                if(alpha) buffer.put((byte) ((pixel >> 24) & 0xFF));
+	                else buffer.put((byte)(0xFF));
+	            }
+	        buffer.flip();
+	        
+	        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	        
+	        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, image.getWidth(), image.getHeight(), 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+	        MemoryUtil.memFree(buffer);
+	        glBindTexture(GL_TEXTURE_2D, 0);
+		} catch (IOException e) {e.printStackTrace();}
         return texture;
 	}
 }
