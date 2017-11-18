@@ -1,1 +1,1 @@
-"C:\Program Files\Java\jdk-9.0.1\bin\java.exe" -jar SimulatedClient.jar
+"C:\Program Files\Java\jdk-9.0.1\bin\java.exe" -jar SimulatedClient.jar "127.0.0.1" "50000"
